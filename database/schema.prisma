@@ -1,0 +1,19 @@
+// database/schema.prisma — Prisma schema template for DEZE.
+// Intentionally minimal for now — models will be added per feature
+// (User, Detailer, Listing, Booking, Payment, Review, etc.) in Phase 1.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Example placeholder model — replace/expand once the data model is designed.
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}

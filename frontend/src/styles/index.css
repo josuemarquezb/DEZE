@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --- DEZE dark theme base styles --- */
+/* Dark mode is the default canvas; accent colors (see tailwind.config.js)
+   provide the bold, vibrant highlights on top of it. */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100;
+}
