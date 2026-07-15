@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js",
+    "start": "prisma migrate deploy --schema=../database/schema.prisma && node server.js",
+    "postinstall": "prisma generate --schema=../database/schema.prisma",
     "db:generate": "prisma generate --schema=../database/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=../database/schema.prisma",
     "db:seed": "node ../database/seed.js",
@@ -22,11 +23,11 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
     "nodemailer": "^6.9.13",
+    "prisma": "^5.15.0",
     "stripe": "^16.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4",
-    "prisma": "^5.15.0"
+    "nodemon": "^3.1.4"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,
