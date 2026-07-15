@@ -1,9 +1,6 @@
-// config/db.js — Prisma client singleton used across the backend.
-// Import this wherever database access is needed instead of
-// instantiating a new PrismaClient in each file.
+// config/db.js — re-exports the shared Prisma client singleton.
+// The singleton itself lives in prisma.js (backend root); this file exists
+// so existing `import prisma from '../config/db.js'` call sites keep working.
+// New code can import '../prisma.js' directly.
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-export default prisma;
+export { default } from '../prisma.js';

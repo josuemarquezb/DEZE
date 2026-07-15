@@ -1,0 +1,26 @@
+{
+  "name": "deze-database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Prisma schema, migrations, and seed data for DEZE — installed separately from backend/ so seed.js can resolve its own dependencies.",
+  "scripts": {
+    "generate": "prisma generate --schema=schema.prisma",
+    "migrate": "prisma migrate dev --schema=schema.prisma",
+    "reset": "prisma migrate reset --schema=schema.prisma --skip-seed",
+    "seed": "node seed.js",
+    "studio": "prisma studio --schema=schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true
+  }
+}

@@ -1,6 +1,14 @@
-// database/schema.prisma — Prisma schema template for DEZE.
-// Intentionally minimal for now — models will be added per feature
-// (User, Detailer, Listing, Booking, Payment, Review, etc.) in Phase 1.
+// database/schema.prisma — DEZE data model.
+//
+// Prisma can't express CHECK constraints, so the fields below that need one
+// are marked "// CHECK:" inline. Add these to the generated migration's SQL
+// by hand after running `prisma migrate dev`:
+//   - DetailerProfile.rating            CHECK (rating >= 0 AND rating <= 5)
+//   - DetailerProfile.hourlyRate        CHECK (hourly_rate > 0)
+//   - DetailerProfile.serviceAreaRadius CHECK (service_area_radius > 0)
+//   - DetailJob.budget                  CHECK (budget > 0)
+//   - DetailJob.agreedPrice             CHECK (agreed_price > 0)
+//   - Review.rating                     CHECK (rating >= 1 AND rating <= 5)
 
 generator client {
   provider = "prisma-client-js"
@@ -11,9 +19,282 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Example placeholder model — replace/expand once the data model is designed.
+// ─── Enums ───────────────────────────────────────────────────────────────
+
+enum UserType {
+  CUSTOMER
+  DETAILER
+}
+
+enum ServiceType {
+  BASIC
+  FULL
+  CERAMIC
+  INTERIOR
+  EXTERIOR
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum JobStatus {
+  REQUESTED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+// Note: JOB_COMPLETED isn't in the task's illustrative enum list (which had
+// JOB_POSTED/JOB_ACCEPTED/MESSAGE/REVIEW/VERIFIED/WELCOME) but the trigger
+// list separately requires "Job Completed -> notify customer to leave
+// review" as its own distinct event, so it's added here as a 7th type.
+enum NotificationType {
+  WELCOME
+  JOB_POSTED
+  JOB_ACCEPTED
+  JOB_COMPLETED
+  MESSAGE
+  REVIEW
+  VERIFIED
+}
+
+// ─── Core ────────────────────────────────────────────────────────────────
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  password     String
+  userType     UserType
+  firstName    String
+  lastName     String
+  phone        String?
+  profilePhoto String?
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // A User is exactly one of these, enforced at the application layer
+  // (Prisma can't require "exactly one of two optional relations").
+  detailerProfile DetailerProfile?
+  customerProfile CustomerProfile?
+
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+
+  passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
+
+  @@index([userType])
+}
+
+model DetailerProfile {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @unique @db.Uuid
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                String?
+  serviceTypes       ServiceType[]
+  rating             Float              @default(0) // CHECK: 0 <= rating <= 5
+  totalReviews       Int                @default(0)
+  hourlyRate         Float? // CHECK: hourlyRate > 0
+  yearsExperience    Int?
+  equipmentPhotos    String[]
+  verificationDocs   String[]
+  verificationStatus VerificationStatus @default(PENDING)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  bankAccount        String? // encrypted at the application layer before persisting
+  serviceAreaRadius  Int                @default(25) // CHECK: serviceAreaRadius > 0
+  latitude           Float?
+  longitude          Float?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  detailJobs   DetailJob[]
+  reviews      Review[]
+  subscription Subscription?
+  payout       Payout?
+
+  @@index([verificationStatus])
+  @@index([latitude, longitude])
+}
+
+model CustomerProfile {
+  id                    String        @id @default(uuid()) @db.Uuid
+  userId                String        @unique @db.Uuid
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedAddresses        Json?
+  defaultAddress        String?
+  preferredServiceTypes ServiceType[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  detailJobs DetailJob[]
+  reviews    Review[]
+}
+
+// ─── Jobs & messaging ──────────────────────────────────────────────────────
+
+model DetailJob {
+  id                 String           @id @default(uuid()) @db.Uuid
+  customerId         String           @db.Uuid
+  customer           CustomerProfile  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  detailerId         String?          @db.Uuid
+  detailer           DetailerProfile? @relation(fields: [detailerId], references: [id], onDelete: SetNull)
+  status             JobStatus        @default(REQUESTED)
+  jobTitle           String
+  description        String?
+  serviceType        ServiceType
+  vehicleType        String
+  vehicleYear        Int
+  vehicleMake        String
+  vehicleModel       String
+  vehicleColor       String?
+  locationAddress    String
+  latitude           Float
+  longitude          Float
+  requestedDate      DateTime
+  requestedTimeStart String // HH:MM
+  requestedTimeEnd   String // HH:MM
+  budget             Float // CHECK: budget > 0
+  agreedPrice        Float? // CHECK: agreedPrice > 0
+  photosBefore       String[]
+  photosAfter        String[]
+  notesFromDetailer  String?
+  createdAt          DateTime         @default(now())
+  completedAt        DateTime?
+  paymentStatus      PaymentStatus    @default(PENDING)
+  paymentId          String? // Stripe payment intent/charge ID
+
+  messages Message[]
+  reviews  Review[]
+
+  @@index([customerId])
+  @@index([detailerId])
+  @@index([status])
+  @@index([latitude, longitude])
+}
+
+model Message {
+  id          String    @id @default(uuid()) @db.Uuid
+  jobId       String    @db.Uuid
+  job         DetailJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  senderId    String    @db.Uuid
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
+  senderType  UserType
+  recipientId String    @db.Uuid
+  recipient   User      @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  messageText String
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  @@index([jobId])
+  @@index([senderId])
+  @@index([recipientId])
+}
+
+// ─── Reviews, billing & payouts ────────────────────────────────────────────
+
+model Review {
+  id         String          @id @default(uuid()) @db.Uuid
+  jobId      String          @unique @db.Uuid // one review per completed job
+  job        DetailJob       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerId String          @db.Uuid
+  customer   CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  detailerId String          @db.Uuid
+  detailer   DetailerProfile @relation(fields: [detailerId], references: [id], onDelete: Cascade)
+  rating     Int // CHECK: 1 <= rating <= 5
+  comment    String?
+  createdAt  DateTime        @default(now())
+
+  @@index([detailerId])
+  @@index([customerId])
+}
+
+// Detailer's recurring platform subscription (billed via Stripe).
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  detailerId           String             @unique @db.Uuid
+  detailer             DetailerProfile    @relation(fields: [detailerId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?            @unique
+  plan                 String?
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+// Detailer's earnings payout record (Stripe Connect).
+model Payout {
+  id              String          @id @default(uuid()) @db.Uuid
+  detailerId      String          @unique @db.Uuid
+  detailer        DetailerProfile @relation(fields: [detailerId], references: [id], onDelete: Cascade)
+  stripeAccountId String?
+  stripePayoutId  String?
+  amount          Float?
+  status          PayoutStatus    @default(PENDING)
+  scheduledAt     DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────
+
+// In-app + email notification record. `data` carries whatever the frontend
+// needs to link back to the source (jobId, reviewId, etc.) without joining —
+// see controllers/notifications.controller.js for the shape per type.
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
+}
+
+// ─── Auth ──────────────────────────────────────────────────────────────────
+
+// One-time password reset tokens (POST /auth/forgot-password + /auth/reset-password).
+// Only the SHA-256 hash of the token is stored — the raw token is emailed to
+// the user and never persisted, mirroring how passwords themselves are handled.
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
