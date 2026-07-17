@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ServiceTypeSelector from '../components/ServiceTypeSelector.jsx';
+import LocationPicker from '../components/LocationPicker.jsx';
 import PhotoUpload from '../components/PhotoUpload.jsx';
 import * as detailerService from '../services/detailerService.js';
 import * as photoService from '../services/photoService.js';
@@ -25,8 +26,9 @@ function DetailerOnboarding() {
     yearsExperience: '',
     serviceTypes: [],
     hourlyRate: '',
-    latitude: '',
-    longitude: '',
+    latitude: null,
+    longitude: null,
+    address: '',
     serviceAreaRadius: 25,
   });
 
@@ -45,9 +47,12 @@ function DetailerOnboarding() {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  const setLocation = (loc) =>
+    setForm((f) => ({ ...f, latitude: loc.latitude, longitude: loc.longitude, address: loc.address }));
+
   const canAdvance = () => {
     if (step === 1) return form.serviceTypes.length > 0;
-    if (step === 3) return form.latitude !== '' && form.longitude !== '';
+    if (step === 3) return form.latitude != null && form.longitude != null;
     return true;
   };
 
@@ -73,8 +78,8 @@ function DetailerOnboarding() {
         serviceTypes: form.serviceTypes,
         hourlyRate: form.hourlyRate === '' ? null : Number(form.hourlyRate),
         yearsExperience: form.yearsExperience === '' ? null : Number(form.yearsExperience),
-        latitude: Number(form.latitude),
-        longitude: Number(form.longitude),
+        latitude: form.latitude,
+        longitude: form.longitude,
         serviceAreaRadius: Number(form.serviceAreaRadius),
       });
 
@@ -152,19 +157,10 @@ function DetailerOnboarding() {
 
         {step === 3 && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-300">Latitude</label>
-                <input type="number" step="any" placeholder="30.2672" value={form.latitude} onChange={set('latitude')} className={inputClass} />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-300">Longitude</label>
-                <input type="number" step="any" placeholder="-97.7431" value={form.longitude} onChange={set('longitude')} className={inputClass} />
-              </div>
-            </div>
-            <p className="text-xs text-zinc-500">
-              Find your coordinates by right-clicking your location on Google Maps.
-            </p>
+            <LocationPicker
+              value={{ latitude: form.latitude, longitude: form.longitude, address: form.address }}
+              onChange={setLocation}
+            />
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-300">Service area radius (miles)</label>
               <input type="number" min="1" value={form.serviceAreaRadius} onChange={set('serviceAreaRadius')} className={`${inputClass} sm:w-40`} />
