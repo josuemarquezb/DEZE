@@ -1,10 +1,13 @@
 // components/ProfileForm.jsx — reusable form to create/edit a detailer profile.
 // Used by DetailerDashboard's "Edit Profile" mode. DetailerOnboarding uses its
 // own step-by-step wizard (see pages/DetailerOnboarding.jsx) but shares
-// ServiceTypeSelector/PhotoUpload with this form.
+// ServiceTypeSelector/PhotoUpload/LocationPicker with this form — location is
+// always auto-detected (or resolved from a typed address) via LocationPicker,
+// never entered as raw lat/lng (see LocationPicker.jsx).
 
 import { useState } from 'react';
 import ServiceTypeSelector from './ServiceTypeSelector.jsx';
+import LocationPicker from './LocationPicker.jsx';
 
 const emptyErrors = {};
 
@@ -19,8 +22,9 @@ function ProfileForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save ch
     yearsExperience: initialValues.yearsExperience ?? '',
     serviceTypes: initialValues.serviceTypes || [],
     hourlyRate: initialValues.hourlyRate ?? '',
-    latitude: initialValues.latitude ?? '',
-    longitude: initialValues.longitude ?? '',
+    latitude: initialValues.latitude ?? null,
+    longitude: initialValues.longitude ?? null,
+    address: '',
     serviceAreaRadius: initialValues.serviceAreaRadius ?? 25,
   });
   const [errors, setErrors] = useState(emptyErrors);
@@ -29,14 +33,13 @@ function ProfileForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save ch
 
   const set = (field) => (e) => setValues((v) => ({ ...v, [field]: e.target.value }));
 
+  const setLocation = (loc) =>
+    setValues((v) => ({ ...v, latitude: loc.latitude, longitude: loc.longitude, address: loc.address }));
+
   const validate = () => {
     const next = {};
     if (values.serviceTypes.length === 0) next.serviceTypes = 'Select at least one service type';
     if (values.hourlyRate !== '' && Number(values.hourlyRate) <= 0) next.hourlyRate = 'Must be greater than 0';
-    if (values.latitude !== '' && (Number(values.latitude) < -90 || Number(values.latitude) > 90))
-      next.latitude = 'Must be between -90 and 90';
-    if (values.longitude !== '' && (Number(values.longitude) < -180 || Number(values.longitude) > 180))
-      next.longitude = 'Must be between -180 and 180';
     if (Number(values.serviceAreaRadius) <= 0) next.serviceAreaRadius = 'Must be greater than 0';
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -54,8 +57,8 @@ function ProfileForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save ch
         serviceTypes: values.serviceTypes,
         hourlyRate: values.hourlyRate === '' ? null : Number(values.hourlyRate),
         yearsExperience: values.yearsExperience === '' ? null : Number(values.yearsExperience),
-        latitude: values.latitude === '' ? undefined : Number(values.latitude),
-        longitude: values.longitude === '' ? undefined : Number(values.longitude),
+        latitude: values.latitude ?? undefined,
+        longitude: values.longitude ?? undefined,
         serviceAreaRadius: Number(values.serviceAreaRadius),
       });
     } catch (err) {
@@ -114,29 +117,11 @@ function ProfileForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save ch
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-300">Latitude</label>
-          <input
-            type="number"
-            step="any"
-            value={values.latitude}
-            onChange={set('latitude')}
-            placeholder="30.2672"
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white placeholder-zinc-600 focus:border-accent focus:outline-none"
+        <div className="sm:col-span-2">
+          <LocationPicker
+            value={{ latitude: values.latitude, longitude: values.longitude, address: values.address }}
+            onChange={setLocation}
           />
-          {errors.latitude && <p className="mt-1 text-sm text-red-400">{errors.latitude}</p>}
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-300">Longitude</label>
-          <input
-            type="number"
-            step="any"
-            value={values.longitude}
-            onChange={set('longitude')}
-            placeholder="-97.7431"
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white placeholder-zinc-600 focus:border-accent focus:outline-none"
-          />
-          {errors.longitude && <p className="mt-1 text-sm text-red-400">{errors.longitude}</p>}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-zinc-300">Service radius (mi)</label>
@@ -150,9 +135,6 @@ function ProfileForm({ initialValues, onSubmit, onCancel, submitLabel = 'Save ch
           {errors.serviceAreaRadius && <p className="mt-1 text-sm text-red-400">{errors.serviceAreaRadius}</p>}
         </div>
       </div>
-      <p className="-mt-3 text-xs text-zinc-500">
-        You can find your coordinates by right-clicking your location on Google Maps.
-      </p>
 
       {submitError && <p className="text-sm text-red-400">{submitError}</p>}
 
