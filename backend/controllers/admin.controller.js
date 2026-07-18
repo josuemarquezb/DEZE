@@ -7,7 +7,10 @@
 // subscriptions × SUBSCRIPTION_PRICE), not a ledger of realized charges, and the
 // monthly chart applies that same current MRR to every month rather than
 // fabricating a billing history that doesn't exist. Job revenue, by contrast, is
-// computed for real from DetailJob.agreedPrice/paymentStatus/completedAt.
+// computed for real from DetailJob.paymentStatus/completedAt — and under the 5%
+// + 5% fee model (see computeJobFees in jobs.controller.js), DEZE's actual job
+// revenue is customerFee + detailerFee (10% of agreedPrice), not agreedPrice
+// itself, since the rest passes through to the detailer.
 
 import prisma from '../config/db.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -36,6 +39,12 @@ const toJobSummary = (job) => ({
   paymentStatus: job.paymentStatus,
   budget: job.budget,
   agreedPrice: job.agreedPrice,
+  customerFee: job.customerFee,
+  detailerFee: job.detailerFee,
+  totalCustomerCost: job.totalCustomerCost,
+  detailerPayout: job.detailerPayout,
+  // DEZE's actual revenue on this job (10% of agreedPrice, once fees exist).
+  dezeRevenue: job.customerFee != null && job.detailerFee != null ? job.customerFee + job.detailerFee : null,
   requestedDate: job.requestedDate,
   createdAt: job.createdAt,
   completedAt: job.completedAt,
@@ -48,16 +57,35 @@ const JOB_ADMIN_INCLUDE = {
   detailer: { include: { user: { select: { firstName: true, lastName: true } } } },
 };
 
-/** Sums PAID job revenue in a date range (inclusive start, exclusive end). Pass no args for all-time. */
+/**
+ * Sums DEZE's actual platform revenue from PAID jobs in a date range
+ * (inclusive start, exclusive end) — that's customerFee + detailerFee (10% of
+ * agreedPrice), not agreedPrice itself. Pass no args for all-time.
+ */
 const jobRevenueBetween = async (start, end) => {
   const agg = await prisma.detailJob.aggregate({
     where: {
       paymentStatus: 'PAID',
       ...(start || end ? { completedAt: { ...(start ? { gte: start } : {}), ...(end ? { lt: end } : {}) } } : {}),
     },
-    _sum: { agreedPrice: true },
+    _sum: { customerFee: true, detailerFee: true },
   });
-  return agg._sum.agreedPrice ?? 0;
+  return (agg._sum.customerFee ?? 0) + (agg._sum.detailerFee ?? 0);
+};
+
+/**
+ * Sums the customer-side and detailer-side fee totals separately from PAID
+ * jobs in a date range. Used for the revenue breakdown on /admin/revenue.
+ */
+const feeBreakdownBetween = async (start, end) => {
+  const agg = await prisma.detailJob.aggregate({
+    where: {
+      paymentStatus: 'PAID',
+      ...(start || end ? { completedAt: { ...(start ? { gte: start } : {}), ...(end ? { lt: end } : {}) } } : {}),
+    },
+    _sum: { customerFee: true, detailerFee: true },
+  });
+  return { customerFees: agg._sum.customerFee ?? 0, detailerFees: agg._sum.detailerFee ?? 0 };
 };
 
 /** GET /api/admin/dashboard — high-level platform metrics (protected, admin). */
@@ -224,7 +252,7 @@ export const getDetailerEarnings = asyncHandler(async (req, res) => {
   const [earnedAgg, recentJobsRaw] = await prisma.$transaction([
     prisma.detailJob.aggregate({
       where: { detailerId: id, status: 'COMPLETED', paymentStatus: 'PAID' },
-      _sum: { agreedPrice: true },
+      _sum: { detailerPayout: true },
     }),
     prisma.detailJob.findMany({
       where: { detailerId: id },
@@ -234,7 +262,8 @@ export const getDetailerEarnings = asyncHandler(async (req, res) => {
     }),
   ]);
 
-  const totalEarned = earnedAgg._sum.agreedPrice ?? 0;
+  // Post-fee payout total (agreedPrice - 5% detailer fee), not gross agreedPrice.
+  const totalEarned = earnedAgg._sum.detailerPayout ?? 0;
   const totalPaidOut = profile.payout?.status === 'PAID' ? profile.payout.amount ?? 0 : 0;
 
   res.status(200).json({
@@ -308,15 +337,16 @@ export const getRevenue = asyncHandler(async (req, res) => {
   const monthStart = startOfMonth(now);
   const monthEnd = startOfNextMonth(now);
 
-  const [allTimeJobRevenue, jobRevenueThisMonth, activeSubscriptions, payoutAgg, detailerEarnedAgg, nextPayout] =
+  const [allTimeJobRevenue, jobRevenueThisMonth, allTimeFeeBreakdown, activeSubscriptions, payoutAgg, detailerEarnedAgg, nextPayout] =
     await Promise.all([
       jobRevenueBetween(),
       jobRevenueBetween(monthStart, monthEnd),
+      feeBreakdownBetween(),
       prisma.subscription.count({ where: { status: 'ACTIVE' } }),
       prisma.payout.aggregate({ where: { status: 'PAID' }, _sum: { amount: true } }),
       prisma.detailJob.aggregate({
         where: { paymentStatus: 'PAID', detailerId: { not: null } },
-        _sum: { agreedPrice: true },
+        _sum: { detailerPayout: true },
       }),
       prisma.payout.findFirst({
         where: { status: 'PENDING', scheduledAt: { gte: now } },
@@ -327,7 +357,7 @@ export const getRevenue = asyncHandler(async (req, res) => {
 
   const subscriptionRevenue = activeSubscriptions * SUBSCRIPTION_PRICE;
   const totalPaidOut = payoutAgg._sum.amount ?? 0;
-  const totalOwed = Math.max(0, (detailerEarnedAgg._sum.agreedPrice ?? 0) - totalPaidOut);
+  const totalOwed = Math.max(0, (detailerEarnedAgg._sum.detailerPayout ?? 0) - totalPaidOut);
 
   // Real month-by-month job revenue for the trailing MONTHS_IN_CHART months;
   // subscription revenue is the current MRR snapshot applied uniformly (see
@@ -348,6 +378,12 @@ export const getRevenue = asyncHandler(async (req, res) => {
   res.status(200).json({
     allTime: { total: allTimeJobRevenue + subscriptionRevenue, jobRevenue: allTimeJobRevenue, subscriptionRevenue },
     thisMonth: { total: jobRevenueThisMonth + subscriptionRevenue, jobRevenue: jobRevenueThisMonth, subscriptionRevenue },
+    // DEZE's 5% + 5% job fee split, all-time (see computeJobFees in jobs.controller.js).
+    fees: {
+      total: allTimeFeeBreakdown.customerFees + allTimeFeeBreakdown.detailerFees,
+      customerFees: allTimeFeeBreakdown.customerFees,
+      detailerFees: allTimeFeeBreakdown.detailerFees,
+    },
     monthly,
     activeSubscriptions,
     payouts: { totalOwed, totalPaidOut, nextPayoutDate: nextPayout?.scheduledAt ?? null },

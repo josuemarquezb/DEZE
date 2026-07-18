@@ -202,6 +202,7 @@ function JobDetail() {
             job={job}
             canPropose={canProposePrice}
             onPropose={(price) => jobService.proposePrice(job.id, price).then((updated) => setJob(updated))}
+            viewerRole={isOwner ? 'CUSTOMER' : isAssignedDetailer ? 'DETAILER' : null}
           />
         </div>
       )}

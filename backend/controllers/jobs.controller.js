@@ -24,6 +24,23 @@ import { formatJobsAsGeoJSON } from '../utils/geoUtils.js';
 const DEFAULT_SEARCH_RADIUS_MILES = 25;
 const JOB_NOTIFICATION_RADIUS_MILES = 25;
 
+// DEZE's fee model: 5% on top of the agreed price for the customer, 5% held
+// back from the agreed price for the detailer — DEZE keeps 10% of every job.
+const DEZE_FEE_RATE = 0.05;
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/** Derives the customer/detailer fee split + totals from an agreed price. */
+const computeJobFees = (agreedPrice) => {
+  const customerFee = round2(agreedPrice * DEZE_FEE_RATE);
+  const detailerFee = round2(agreedPrice * DEZE_FEE_RATE);
+  return {
+    customerFee,
+    detailerFee,
+    totalCustomerCost: round2(agreedPrice + customerFee),
+    detailerPayout: round2(agreedPrice - detailerFee),
+  };
+};
+
 // A job can only move to these statuses from its current one. REQUESTED and
 // ACCEPTED are reached via createJob/acceptJob/declineJob, not this map.
 const STATUS_TRANSITIONS = {
@@ -102,6 +119,10 @@ const toPublicJob = (job) => ({
   requestedTimeEnd: job.requestedTimeEnd,
   budget: job.budget,
   agreedPrice: job.agreedPrice,
+  customerFee: job.customerFee,
+  detailerFee: job.detailerFee,
+  totalCustomerCost: job.totalCustomerCost,
+  detailerPayout: job.detailerPayout,
   photosBefore: job.photosBefore,
   photosAfter: job.photosAfter,
   createdAt: job.createdAt,
@@ -517,7 +538,7 @@ export const proposePrice = asyncHandler(async (req, res) => {
 
   const updated = await prisma.detailJob.update({
     where: { id: job.id },
-    data: { agreedPrice: proposedPrice },
+    data: { agreedPrice: proposedPrice, ...computeJobFees(proposedPrice) },
     include: JOB_INCLUDE,
   });
 

@@ -179,6 +179,10 @@ model DetailJob {
   requestedTimeEnd   String // HH:MM
   budget             Float // CHECK: budget > 0
   agreedPrice        Float? // CHECK: agreedPrice > 0
+  customerFee        Float? // 5% of agreedPrice, added on top of what the customer is charged
+  detailerFee        Float? // 5% of agreedPrice, deducted from the detailer's payout
+  totalCustomerCost  Float? // agreedPrice + customerFee — what the customer is actually charged
+  detailerPayout     Float? // agreedPrice - detailerFee — what the detailer actually receives
   photosBefore       String[]
   photosAfter        String[]
   notesFromDetailer  String?

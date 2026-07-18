@@ -315,7 +315,7 @@ export const getMyStats = asyncHandler(async (req, res) => {
     prisma.review.aggregate({ where: { detailerId: profile.id }, _avg: { rating: true }, _count: { rating: true } }),
     prisma.detailJob.aggregate({
       where: { detailerId: profile.id, status: 'COMPLETED', paymentStatus: 'PAID' },
-      _sum: { agreedPrice: true },
+      _sum: { detailerPayout: true },
     }),
   ]);
 
@@ -323,7 +323,8 @@ export const getMyStats = asyncHandler(async (req, res) => {
     totalJobsCompleted,
     averageRating: ratingAgg._avg.rating ?? 0,
     totalReviews: ratingAgg._count.rating,
-    totalEarnings: earningsAgg._sum.agreedPrice ?? 0,
+    // Post-fee payout total (agreedPrice - 5% detailer fee), not gross agreedPrice.
+    totalEarnings: earningsAgg._sum.detailerPayout ?? 0,
     verificationStatus: profile.verificationStatus,
     subscriptionStatus: profile.subscriptionStatus,
   });

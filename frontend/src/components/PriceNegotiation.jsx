@@ -1,12 +1,17 @@
 // components/PriceNegotiation.jsx — shows the customer's budget vs. the
-// detailer's proposed/agreed price. Only the assigned detailer can propose a
-// price (see PUT /jobs/:id/price in backend/controllers/jobs.controller.js);
+// detailer's proposed/agreed price, plus DEZE's 5% + 5% fee breakdown once a
+// price is agreed (see computeJobFees in backend/controllers/jobs.controller.js).
+// Only the assigned detailer can propose a price (see PUT /jobs/:id/price);
 // there's no separate accept/reject step in the API — the customer sees the
 // current agreedPrice update live once the detailer proposes one.
+//
+// `viewerRole` controls which side of the fee the viewer sees: a customer is
+// shown what they'll pay (price + 5% fee = total), a detailer is shown what
+// they'll keep (price - 5% fee = payout). Anyone else just sees the raw price.
 
 import { useState } from 'react';
 
-function PriceNegotiation({ job, canPropose, onPropose }) {
+function PriceNegotiation({ job, canPropose, onPropose, viewerRole }) {
   const [price, setPrice] = useState(job.agreedPrice ?? job.budget ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -38,6 +43,28 @@ function PriceNegotiation({ job, canPropose, onPropose }) {
         <span className="text-zinc-400">Agreed price</span>
         <span className="font-medium text-accent">{job.agreedPrice != null ? `$${job.agreedPrice}` : 'Not set yet'}</span>
       </div>
+
+      {job.agreedPrice != null && viewerRole === 'CUSTOMER' && job.totalCustomerCost != null && (
+        <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm">
+          <p className="text-zinc-300">
+            Agreed Price: <span className="text-white">${job.agreedPrice}</span> + 5% DEZE Fee:{' '}
+            <span className="text-white">${job.customerFee}</span> = Total:{' '}
+            <span className="font-semibold text-accent">${job.totalCustomerCost}</span>
+          </p>
+          <p className="mt-1 text-xs text-zinc-500">This is the full amount you'll be charged.</p>
+        </div>
+      )}
+
+      {job.agreedPrice != null && viewerRole === 'DETAILER' && job.detailerPayout != null && (
+        <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm">
+          <p className="text-zinc-300">
+            Agreed Price: <span className="text-white">${job.agreedPrice}</span> - 5% DEZE Fee:{' '}
+            <span className="text-white">${job.detailerFee}</span> = Your Payout:{' '}
+            <span className="font-semibold text-accent">${job.detailerPayout}</span>
+          </p>
+          <p className="mt-1 text-xs text-zinc-500">This is what you'll actually receive for this job.</p>
+        </div>
+      )}
 
       {canPropose && (
         <form onSubmit={handleSubmit} className="mt-4 flex items-end gap-3 border-t border-zinc-800 pt-4">

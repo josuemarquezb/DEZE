@@ -15,7 +15,7 @@ function JobTable({ jobs, onMarkCompleted, onDispute }) {
 
   return (
     <div className="overflow-x-auto rounded-xl border border-zinc-800">
-      <table className="w-full min-w-[860px] text-left text-sm">
+      <table className="w-full min-w-[980px] text-left text-sm">
         <thead className="border-b border-zinc-800 bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
           <tr>
             <th className="px-4 py-3">Job</th>
@@ -25,6 +25,7 @@ function JobTable({ jobs, onMarkCompleted, onDispute }) {
             <th className="px-4 py-3">Status</th>
             <th className="px-4 py-3">Date</th>
             <th className="px-4 py-3">Amount</th>
+            <th className="px-4 py-3">DEZE Revenue</th>
             <th className="px-4 py-3">Actions</th>
           </tr>
         </thead>
@@ -47,6 +48,7 @@ function JobTable({ jobs, onMarkCompleted, onDispute }) {
               <td className="px-4 py-3 text-accent">
                 {job.agreedPrice != null ? `$${job.agreedPrice}` : job.budget != null ? `$${job.budget} (budget)` : '—'}
               </td>
+              <td className="px-4 py-3 text-zinc-400">{job.dezeRevenue != null ? `$${job.dezeRevenue.toFixed(2)}` : '—'}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-3">
                   {job.status === 'IN_PROGRESS' && onMarkCompleted && (

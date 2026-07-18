@@ -46,7 +46,21 @@ function AdminRevenue() {
         <RevenueChart data={revenue.monthly} />
         <p className="mt-3 text-xs text-zinc-600">
           Subscription revenue reflects current active subscriptions × $75/month applied across the chart, since billing
-          history isn't tracked yet. Job revenue is computed from actual completed, paid jobs per month.
+          history isn't tracked yet. Job revenue is DEZE's 5% + 5% fee take (not the full agreed price) from actual
+          completed, paid jobs per month.
+        </p>
+      </div>
+
+      <div className="mb-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+        <h2 className="mb-4 text-lg font-semibold text-white">DEZE job fees (all-time)</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard label="Total fees collected" value={`$${revenue.fees.total.toLocaleString()}`} highlight />
+          <StatCard label="Customer fees (5%)" value={`$${revenue.fees.customerFees.toLocaleString()}`} />
+          <StatCard label="Detailer fees (5%)" value={`$${revenue.fees.detailerFees.toLocaleString()}`} />
+        </div>
+        <p className="mt-3 text-xs text-zinc-600">
+          For every agreed job price, DEZE adds 5% on top for the customer and holds back 5% from the detailer — 10% of
+          the agreed price total.
         </p>
       </div>
 
