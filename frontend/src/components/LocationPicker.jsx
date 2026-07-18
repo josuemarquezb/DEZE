@@ -59,7 +59,7 @@ function LocationPicker({ value, onChange, error }) {
   }, []);
 
   const handleFindAddress = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (!addressInput.trim()) return;
 
     setStatus(STATUS.GEOCODING);
@@ -116,21 +116,28 @@ function LocationPicker({ value, onChange, error }) {
       {status === STATUS.NEEDS_MANUAL && (
         <div>
           {detectError && <p className="mb-2 text-sm text-yellow-400">{detectError} Enter your address below instead.</p>}
-          <form onSubmit={handleFindAddress} className="flex flex-wrap items-start gap-3">
+          {/* Not a <form> — this can be nested inside a caller's own <form> (e.g.
+              JobForm, ProfileForm), and a nested <form> submit would bubble up and
+              trigger the outer form's native submission instead of this lookup. */}
+          <div className="flex flex-wrap items-start gap-3">
             <input
               type="text"
               value={addressInput}
               onChange={(e) => setAddressInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleFindAddress(e);
+              }}
               placeholder="Enter your address"
               className="min-w-[16rem] flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white placeholder-zinc-600 focus:border-accent focus:outline-none"
             />
             <button
-              type="submit"
+              type="button"
+              onClick={handleFindAddress}
               className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
             >
               Find address
             </button>
-          </form>
+          </div>
           {geocodeError && <p className="mt-2 text-sm text-red-400">{geocodeError}</p>}
           <button type="button" onClick={detect} className="mt-2 text-sm text-accent hover:underline">
             Try auto-detecting my location again

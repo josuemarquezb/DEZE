@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "prisma migrate deploy --schema=../database/schema.prisma && node server.js",
+    "start": "prisma generate --schema=../database/schema.prisma && prisma migrate deploy --schema=../database/schema.prisma && node server.js",
     "postinstall": "prisma generate --schema=../database/schema.prisma",
     "db:generate": "prisma generate --schema=../database/schema.prisma",
     "db:migrate": "prisma migrate dev --schema=../database/schema.prisma",
